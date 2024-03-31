@@ -134,10 +134,10 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
                             phone_numbers_str = "Nenhum número encontrado"
                         writer = csv.writer(arquivo_csv)
                         writer.writerow([dominio, phone_numbers_str])
-
+ 
             # Adicionando um pequeno atraso entre as solicitações com intervalo aleatório
-            intervalo_aleatorio = random.uniform(12, 20)
-            print(f"Aguardando {intervalo_aleatorio:.2f} segundos antes da próxima solicitação.")
+            intervalo_aleatorio = random.uniform(10, 12) #ate 400 paginas sem travar
+            print(f"Aguardando {intervalo_aleatorio:.2f} segundos antes da próxima solicitação. Página {pagina + 1}")
             time.sleep(intervalo_aleatorio)
         else:
             print(f"Falha ao acessar a página {pagina + 1}")
