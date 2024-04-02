@@ -7,6 +7,8 @@ from starlette.responses import FileResponse
 
 app = FastAPI()
 
+
+
 # Definindo o diretório para armazenamento dos arquivos CSV
 diretorio_csvs = os.path.join(os.getcwd(), "csvs")
 

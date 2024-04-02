@@ -7,6 +7,22 @@ import random
 import re
 import datetime
 import os
+import ssl
+import urllib3
+
+# Configuração para desabilitar avisos de certificado SSL
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Configurações do proxy
+host = 'brd.superproxy.io'
+port = 22225
+username = 'brd-customer-hl_e9104e6a-zone-googlescrap'
+password = '6hm0q9x73v5x'
+proxy_url = f'http://{username}:{password}@{host}:{port}'
+proxies = {
+    'http': proxy_url,
+    'https': proxy_url,
+}
 
 # Definindo o diretório para armazenamento dos arquivos CSV
 diretorio_csvs = os.path.join(os.getcwd(), "csvs")
@@ -78,7 +94,7 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
         url = url_base + str(pagina)
 
         # Fazendo uma solicitação HTTP para obter o conteúdo da página
-        response = requests.get(url)
+        response = requests.get(url, proxies=proxies, verify=False)
 
         # Verificando se a solicitação foi bem-sucedida (status_code 200)
         if response.status_code == 200:
@@ -136,7 +152,7 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
                         writer.writerow([dominio, phone_numbers_str])
 
             # Adicionando um pequeno atraso entre as solicitações com intervalo aleatório
-            intervalo_aleatorio = random.uniform(12, 20)
+            intervalo_aleatorio = random.uniform(1, 3)
             print(f"Aguardando {intervalo_aleatorio:.2f} segundos antes da próxima solicitação.")
             time.sleep(intervalo_aleatorio)
         else:
