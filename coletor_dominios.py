@@ -7,6 +7,21 @@ import random
 import re
 import datetime
 import os
+import urllib3
+
+# Configuração para desabilitar avisos de certificado SSL
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Configurações do proxy
+host = 'brd.superproxy.io'
+port = 22225
+username = 'brd-customer-hl_e9104e6a-zone-googlescrap'
+password = '6hm0q9x73v5x'
+proxy_url = f'http://{username}:{password}@{host}:{port}'
+proxies = {
+    'http': proxy_url,
+    'https': proxy_url,
+}
 
 # Definindo o diretório para armazenamento dos arquivos CSV
 diretorio_csvs = os.path.join(os.getcwd(), "csvs")
@@ -29,48 +44,43 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
     # Função para extrair número de telefone de uma página HTML
     def extrair_numero_telefone(url):
         try:
-            # Cabeçalho User-Agent simulando um navegador Chrome em Windows 10
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
             }
 
-            # Enviar uma solicitação HTTP para obter o conteúdo da página com um timeout de 4 segundos
             response = requests.get(url, headers=headers, timeout=4)
-            response.raise_for_status()  # Verificar se há erros na solicitação
+            response.raise_for_status()
             content = response.content
 
-            # Parse do HTML com BeautifulSoup
-            soup = BeautifulSoup(content, 'html.parser')
+            soup = BeautifulSoup(content, 'lxml')
 
-            # Encontrar elementos no footer que podem conter números de telefone
-            footer_elements = soup.find_all(['footer', 'div', 'span', 'p', 'a', 'strong'])
+            phone_regex = re.compile(r'''
+                (\+?\d{1,3}[\s-]?)?             # Código do país opcional
+                (\(?\d{1,4}\)?[\s-]?)?          # Código de área opcional
+                (\d{2,3}[\s-]?\d{2,3}[\s-]?\d{2,4})  # Número local
+                ''', re.VERBOSE)
 
-            # Lista para armazenar números de telefone encontrados
-            phone_numbers = []
+            phone_numbers = set()
 
-            # Expressão regular mais flexível para encontrar números de telefone
-            phone_regex = re.compile(r'(?:(?:\+|00)\d{1,3})?[ -]?\(?0?\d{1,3}\)?[ -]?\d{4,5}[ -]?\d{4}')
+            for element in soup.find_all(text=phone_regex):
+                matches = phone_regex.findall(element)
+                matches = [''.join(match).strip() for match in matches]
+                phone_numbers.update(matches)
 
-            for element in footer_elements:
-                # Extrair texto do elemento
-                element_text = element.get_text()
-
-                # Encontrar números de telefone usando a expressão regular
-                matches = phone_regex.findall(element_text)
-
-                # Adicionar números de telefone à lista
-                phone_numbers.extend(matches)
-
-            # Remover duplicatas usando um conjunto (set)
-            unique_phone_numbers = list(set(phone_numbers))
+            # Normalizar números de telefone
+            unique_phone_numbers = [re.sub(r'[^\d\+]', '', number) for number in phone_numbers]
 
             return unique_phone_numbers
         except requests.Timeout:
-            print(f"Timeout ao processar a URL {url}. Pulando para o próximo URL.")
+            print(f"Timeout ao processar a URL {url}.")
+            return []
+        except requests.RequestException as e:
+            print(f"Erro na solicitação ao processar a URL {url}: {str(e)}")
             return []
         except Exception as e:
             print(f"Erro ao processar a URL {url}: {str(e)}")
             return []
+
 
     # Loop através das páginas de resultados da pesquisa
     for pagina in range(numero_paginas):
@@ -78,7 +88,7 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
         url = url_base + str(pagina)
 
         # Fazendo uma solicitação HTTP para obter o conteúdo da página
-        response = requests.get(url)
+        response = requests.get(url,  proxies=proxies, verify=False)
 
         # Verificando se a solicitação foi bem-sucedida (status_code 200)
         if response.status_code == 200:
@@ -91,14 +101,18 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
             # Adicionando os links da página atual à lista de links encontrados
             links_encontrados = []
             for link in links_pagina:
-                href = link.get('href')
-                if href:
-                    links_encontrados.append(href)
-
+                
+                hrefs = link.get('href')
+                if hrefs and "www." in hrefs:
+                    # cleaned_link = href.split("/url?q=")[-1].split("&")[0]
+                    # parsed_link = urlparse(cleaned_link)
+                    url_limpado = hrefs.split('/url?url=')[-1].split("&")[0]
+                    links_encontrados.append(url_limpado)
+                    
             # Limpando os links e coletando apenas os endereços principais
-            links_finais = [link for link in links_encontrados if '/url?q=' in link]
-            links_finais_sem_q = [link.replace("/url?q=", "") for link in links_finais]
-
+            
+            
+            
             # Definindo palavras-chave a serem filtradas
             palavras_chave = ["shein", "mercaolivre", "magazineluiza", "kabum", "submarino", "extra",
                               "casasbahia", "renner", "shopee", "google", "cea", "pontofrio", "riachuelo",
@@ -116,7 +130,7 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
                               "lojasmorenarosa", "gpa"]
 
             # Filtrando os links removendo os que contêm palavras-chave
-            links_finais_filtrados = [link for link in links_finais_sem_q if not any(palavra in link for palavra in palavras_chave)]
+            links_finais_filtrados = [link for link in links_encontrados if not any(palavra in link for palavra in palavras_chave)]
 
             # Extraindo apenas os endereços principais (domínios) dos links filtrados
             for link in links_finais_filtrados:
@@ -136,7 +150,7 @@ def coletar_dominios_e_numeros_telefone(termo_pesquisa, numero_paginas):
                         writer.writerow([dominio, phone_numbers_str])
  
             # Adicionando um pequeno atraso entre as solicitações com intervalo aleatório
-            intervalo_aleatorio = random.uniform(10, 12) #ate 400 paginas sem travar
+            intervalo_aleatorio = random.uniform(1, 3) #ate 400 paginas sem travar
             print(f"Aguardando {intervalo_aleatorio:.2f} segundos antes da próxima solicitação. Página {pagina + 1}")
             time.sleep(intervalo_aleatorio)
         else:
